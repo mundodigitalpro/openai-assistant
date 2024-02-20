@@ -14,6 +14,8 @@ dependencies {
     implementation("com.aallam.openai:openai-client:3.7.0")
     implementation ("io.ktor:ktor-client-cio:2.3.8")
     implementation ("io.ktor:ktor-client-core:2.3.8")
+    implementation ("org.slf4j:slf4j-api:1.7.30")
+    implementation ("ch.qos.logback:logback-classic:1.4.14")
 }
 
 tasks.test {
