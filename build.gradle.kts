@@ -1,9 +1,14 @@
 plugins {
     kotlin("jvm") version "1.9.22"
+    application
+}
+application {
+    var mainClassName = "com.josejordan.MainKt"
 }
 
 group = "com.josejordan"
 version = "1.0-SNAPSHOT"
+
 
 repositories {
     mavenCentral()
@@ -21,6 +26,17 @@ dependencies {
 tasks.test {
     useJUnitPlatform()
 }
+tasks.jar {
+    manifest {
+        attributes(
+            "Main-Class" to "com.josejordan.MainKt"
+        )
+    }
+    // Incluir todas las dependencias en el JAR si es necesario
+    from(configurations.runtimeClasspath.get().map { if (it.isDirectory) it else zipTree(it) })
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
 kotlin {
     jvmToolchain(17)
 }
