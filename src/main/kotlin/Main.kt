@@ -11,108 +11,173 @@ import com.aallam.openai.api.message.MessageRequest
 import com.aallam.openai.api.run.RunRequest
 import com.aallam.openai.api.thread.Thread
 import com.aallam.openai.client.OpenAI
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 
+// Importación de la anotación que permite el uso experimental de APIs en Kotlin
 @OptIn(BetaOpenAI::class)
-class Agent(token: String) {
+class Agent(private var token: String, private var assistantId: String) {
+    // Declaración de variables para interactuar con la API de OpenAI y gestionar el asistente y los hilos
     private var openAI: OpenAI = OpenAI(token)
-    var assistantId: String? = System.getenv("OPENAI_ASSISTANT_ID")
     private var assistant: Assistant? = null
     private var thread: Thread? = null
+    private val coroutineScope = CoroutineScope(Dispatchers.IO)
 
-    suspend fun initialize() {
-        assistantId ?: throw IllegalStateException("OPENAI_ASSISTANT_ID no está configurado.")
-        createAssistant(assistantId!!)
+    // Método para inicializar el agente de manera asíncrona
+    suspend fun initialize() = coroutineScope {
+        launch(Dispatchers.Default) {
+            initializeOpenAI()
+            initializeAssistantAndThread()
+        }.join() // Espera a que la inicialización termine
+    }
+
+    // Método para inicializar el cliente de OpenAI con el token proporcionado
+    private fun initializeOpenAI() {
+        openAI = OpenAI(token)
+    }
+
+    // Método para inicializar el asistente y el hilo de manera asíncrona
+    private suspend fun initializeAssistantAndThread() {
+        createAssistant(assistantId)
         createThread()
     }
 
+    // Método para crear un asistente con el ID proporcionado
     private suspend fun createAssistant(assistantId: String) {
         assistant = openAI.assistant(id = AssistantId(assistantId))
     }
 
+    // Método para crear un nuevo hilo de conversación
     private suspend fun createThread() {
         thread = openAI.thread()
     }
 
-    suspend fun chat(message: String): String = try {
-        openAI.message(
-            threadId = thread!!.id,
-            request = MessageRequest(role = Role.User, content = message)
-        )
+    // Método para enviar un mensaje al asistente y recibir su respuesta
+    private suspend fun chat(message: String): String {
+        val currentThread = thread
+        val currentAssistant = assistant
+        if (currentThread != null && currentAssistant != null) {
+            return try {
+                openAI.message(
+                    threadId = currentThread.id,
+                    request = MessageRequest(role = Role.User, content = message)
+                )
+                var runStatus: Status
+                val run = openAI.createRun(
+                    threadId = currentThread.id,
+                    request = RunRequest(assistantId = currentAssistant.id)
+                )
 
-        var runStatus: Status
-        val run = openAI.createRun(threadId = thread!!.id, request = RunRequest(assistantId = assistant!!.id))
+                // Bucle para esperar hasta que la ejecución del mensaje esté completa
+                do {
+                    delay(1000) // Espera 1 segundo antes de consultar el estado
+                    val runTest = openAI.getRun(currentThread.id, run.id)
+                    runStatus = runTest.status
+                } while (runStatus != Status.Completed)
 
-        do {
-            delay(1_000)
-            val runTest = openAI.getRun(thread!!.id, run.id)
-            runStatus = runTest.status
-        } while (runStatus != Status.Completed)
-
-        val messages = openAI.messages(thread!!.id)
-        val lastAssistantMessage = messages.find { it.role == Role.Assistant }
-        lastAssistantMessage?.content?.firstOrNull()?.let { content ->
-            if (content is MessageContent.Text) content.text.value else "<Assistant Error>"
-        } ?: "<Assistant Error>"
-    } catch (e: Exception) {
-        "Se produjo un error al procesar su solicitud: ${e.message}"
-    }
-
-
-    fun updateAssistantId() = runBlocking {
-        println("Ingrese el nuevo OPENAI_ASSISTANT_ID: ")
-        val newAssistantId = readlnOrNull()
-        if (!newAssistantId.isNullOrEmpty()) {
-            this@Agent.assistantId = newAssistantId
-            this@Agent.initialize()
-            println("Asistente actualizado con éxito.")
+                // Obtiene los mensajes del hilo y devuelve el último mensaje del asistente
+                val messages = openAI.messages(currentThread.id)
+                val lastAssistantMessage = messages.find { it.role == Role.Assistant }
+                lastAssistantMessage?.content?.firstOrNull()?.let { content ->
+                    if (content is MessageContent.Text) content.text.value else "Error: La respuesta del asistente no es texto."
+                } ?: "Error: No se encontró respuesta del asistente."
+            } catch (e: Exception) {
+                "Se produjo un error al procesar su solicitud: ${e.message}"
+            }
         } else {
-            println("El OPENAI_ASSISTANT_ID no puede estar vacío.")
+            return "Error: El asistente o el hilo no está inicializado correctamente."
         }
     }
 
-    fun chatWithAssistant() = runBlocking {
+    // Método para actualizar el token de la API de OpenAI
+    private fun updateApiToken() {
+        token = readValidLine("Ingrese la nueva OPENAI_API_KEY: ")
+        initializeOpenAI()
+        println("OPENAI_API_KEY actualizado correctamente.")
+    }
+
+    // Método para actualizar el ID del asistente
+    private fun updateAssistantId() {
+        assistantId = readValidLine("Ingrese el nuevo OPENAI_ASSISTANT_ID: ")
+        println("OPENAI_ASSISTANT_ID actualizado correctamente. Por favor, reinicie el asistente.")
+    }
+
+    // Método para interactuar con el asistente mediante la consola
+    private suspend fun chatWithAssistant() {
         while (true) {
-            println("Escribe tu mensaje (o escribe 'salir' para volver al menú principal): ")
-            val message = readlnOrNull()
+            val message = readValidLine(
+                "Escribe tu mensaje (o escribe 'salir' para volver al menú principal): ",
+                "salir"
+            )
             if (message.equals("salir", ignoreCase = true)) break
-            val response = chat(message ?: continue)
+            val response = chat(message)
             println("Respuesta: $response")
         }
     }
 
-    fun updateApiToken() = runBlocking {
-        println("Ingrese la nueva OPENAI_API_KEY: ")
-        val newToken = readlnOrNull()
-        if (!newToken.isNullOrEmpty()) {
-            openAI = OpenAI(newToken)
-            println("OPENAI_API_KEY actualizado correctamente.")
-        } else {
-            println("La OPENAI_API_KEY no puede estar vacía.")
+    // Método para ejecutar un bucle de comandos, permitiendo al usuario interactuar con el agente
+    suspend fun runCommandLoop() {
+        while (true) {
+            println("Opciones: \n1. Actualizar OPENAI_ASSISTANT_ID \n2. Escribir mensaje \n3. Actualizar OPENAI_API_KEY \n4. Salir")
+            when (readlnOrNull()) {
+                "1" -> updateAssistantId()
+                "2" -> chatWithAssistant()
+                "3" -> updateApiToken()
+                "4" -> exitApplication()
+                else -> println("Opción no reconocida, intenta de nuevo.")
+            }
         }
     }
-
-
+    // Método para terminar la ejecución del programa de forma inmediata
+    private fun exitApplication() {
+        println("Cerrando aplicación...")
+        coroutineScope.cancel("Preparando para cerrar la aplicación")
+        kotlin.system.exitProcess(0)
+    }
 }
 
-fun main() = runBlocking {
-    println("Inicializando configuración y asistente...")
 
-    val token = System.getenv("OPENAI_API_KEY") ?: readlnOrNull() ?: throw IllegalArgumentException("OPENAI_API_KEY es necesario.")
-    val agent = Agent(token)
-
-    agent.assistantId = System.getenv("OPENAI_ASSISTANT_ID") ?: readlnOrNull() ?: throw IllegalArgumentException("OPENAI_ASSISTANT_ID es necesario.")
-    agent.initialize()
-
-    commandLoop@ while (true) {
-        println("Opciones: \n1. Actualizar OPENAI_ASSISTANT_ID \n2. Escribir mensaje \n3. Actualizar OPENAI_API_KEY \n4. Salir")
-        when (readlnOrNull()) {
-            "1" -> agent.updateAssistantId()
-            "2" -> agent.chatWithAssistant()
-            "3" -> agent.updateApiToken()
-            "4", "salir" -> break@commandLoop
-            else -> println("Opción no reconocida, intenta de nuevo.")
+// Función para leer una línea válida de la entrada del usuario, con opción de comando de salida
+fun readValidLine(prompt: String, exitCommand: String = ""): String {
+    var line: String?
+    do {
+        println(prompt)
+        line = readlnOrNull()
+        if (line.isNullOrEmpty()) {
+            println("La entrada no puede estar vacía.")
+        } else if (line.equals(exitCommand, ignoreCase = true)) {
+            break
         }
+    } while (line.isNullOrEmpty() || line.equals(exitCommand, ignoreCase = true))
+    return line ?: exitCommand
+}
+
+// Objeto para configurar y obtener variables de entorno o entradas del usuario
+object Configuration {
+    fun getEnvVariableOrUserInput(envVarName: String, promptMessage: String): String {
+        var result = System.getenv(envVarName)
+        while (result.isNullOrEmpty()) {
+            println("$promptMessage: ")
+            result = readln().trim()
+            if (result.isEmpty()) {
+                println("$envVarName no puede estar vacío.")
+            }
+        }
+        return result
     }
+}
+
+// Función principal para ejecutar el agente
+suspend fun main() {
+    val token = Configuration.getEnvVariableOrUserInput(
+        "OPENAI_API_KEY",
+        "OPENAI_API_KEY no está configurado. Por favor, ingresa una nueva OPENAI_API_KEY"
+    )
+    val assistantId = Configuration.getEnvVariableOrUserInput(
+        "OPENAI_ASSISTANT_ID",
+        "OPENAI_ASSISTANT_ID no está configurado. Por favor, ingresa OPENAI_ASSISTANT_ID"
+    )
+
+    val agent = Agent(token, assistantId)
+    agent.initialize() // Esperar a que esta inicialización se complete
+    agent.runCommandLoop()
 }
