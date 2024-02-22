@@ -18,105 +18,83 @@ import kotlinx.coroutines.*
 @OptIn(BetaOpenAI::class)
 class Agent(private var token: String, private var assistantId: String) {
     // Declaración de variables para interactuar con la API de OpenAI y gestionar el asistente y los hilos
-    private var openAI: OpenAI = OpenAI(token)
+    //private var openAI: OpenAI = OpenAI(token)
+    private val openAI = OpenAI(token) // Inicialización directa, elimina la necesidad de un método separado.
     private var assistant: Assistant? = null
     private var thread: Thread? = null
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
+    /*
+        // Método para inicializar el cliente de OpenAI con el token proporcionado
+        private fun initializeOpenAI() {
+            openAI = OpenAI(token)
+        }
+    */
 
-    // Define un manejador de excepciones para las corutinas
-    private val coroutineExceptionHandler = CoroutineExceptionHandler { _, exception ->
-        println("Error en corutina: ${exception.localizedMessage}")
-    }
-    private val coroutineScope = CoroutineScope(Dispatchers.IO + coroutineExceptionHandler)
-
-    // Método para inicializar el agente
-    suspend fun initialize() {
-        initializeOpenAI()
-        initializeAssistantAndThread()
-    }
-
-
-    // Método para inicializar el cliente de OpenAI con el token proporcionado
-    private fun initializeOpenAI() {
-        openAI = OpenAI(token)
-    }
-
-    // Método para inicializar el asistente y el hilo de manera asíncrona
-
-    private suspend fun initializeAssistantAndThread() = coroutineScope {
-        // Ejecución paralela con async-await
+    // Optimiza la inicialización usando directamente coroutines sin un método adicional.
+    suspend fun initialize() = coroutineScope.launch {
+        //initializeOpenAI()
         val assistantDeferred = async { createAssistant(assistantId) }
         val threadDeferred = async { createThread() }
-        // Espera a que ambas operaciones completen
         assistant = assistantDeferred.await()
         thread = threadDeferred.await()
+    }.join() // Asegura que la inicialización completa antes de continuar.
+
+
+    // Simplificación de las funciones de creación utilizando el manejo de errores integrado.
+    private suspend fun createAssistant(assistantId: String): Assistant? = try {
+        openAI.assistant(id = AssistantId(assistantId))
+    } catch (e: Exception) {
+        println("Error al crear el asistente: ${e.message}")
+        null
     }
 
-
-    // Método para crear un asistente con el ID proporcionado
-
-    private suspend fun createAssistant(assistantId: String): Assistant? {
-        return try {
-            openAI.assistant(id = AssistantId(assistantId))
-        } catch (e: Exception) {
-            println("Error al crear el asistente: ${e.message}")
-            null // Retorna null en caso de error
-        }
-    }
-
-
-    // Método para crear un nuevo hilo de conversación
-
-    private suspend fun createThread(): Thread? {
-        return try {
-            openAI.thread()
-        } catch (e: Exception) {
-            println("Error al crear el hilo: ${e.message}")
-            null // Retorna null en caso de error
-        }
+    private suspend fun createThread(): Thread? = try {
+        openAI.thread()
+    } catch (e: Exception) {
+        println("Error al crear el hilo: ${e.message}")
+        null
     }
 
     // Método para enviar un mensaje al asistente y recibir su respuesta
     private suspend fun chat(message: String): String {
-        val currentThread = thread
-        val currentAssistant = assistant
-        if (currentThread != null && currentAssistant != null) {
-            return try {
-                openAI.message(
-                    threadId = currentThread.id,
-                    request = MessageRequest(role = Role.User, content = message)
-                )
-                var runStatus: Status
-                val run = openAI.createRun(
-                    threadId = currentThread.id,
-                    request = RunRequest(assistantId = currentAssistant.id)
-                )
 
-                // Bucle para esperar hasta que la ejecución del mensaje esté completa
-                do {
-                    delay(1000) // Espera 1 segundo antes de consultar el estado
-                    val runTest = openAI.getRun(currentThread.id, run.id)
-                    runStatus = runTest.status
-                } while (runStatus != Status.Completed)
+        val currentThread = thread ?: return "Error: El hilo no está inicializado."
+        val currentAssistant = assistant ?: return "Error: El asistente no está inicializado."
 
-                // Obtiene los mensajes del hilo y devuelve el último mensaje del asistente
-                val messages = openAI.messages(currentThread.id)
-                val lastAssistantMessage = messages.find { it.role == Role.Assistant }
-                lastAssistantMessage?.content?.firstOrNull()?.let { content ->
-                    if (content is MessageContent.Text) content.text.value else "Error: La respuesta del asistente no es texto."
-                } ?: "Error: No se encontró respuesta del asistente."
-            } catch (e: Exception) {
-                "Se produjo un error al procesar su solicitud: ${e.message}"
-            }
-        } else {
-            return "Error: El asistente o el hilo no está inicializado correctamente."
+        return try {
+            openAI.message(
+                threadId = currentThread.id,
+                request = MessageRequest(role = Role.User, content = message)
+            )
+            var runStatus: Status
+            val run = openAI.createRun(
+                threadId = currentThread.id,
+                request = RunRequest(assistantId = currentAssistant.id)
+            )
+
+            // Bucle para esperar hasta que la ejecución del mensaje esté completa
+            do {
+                delay(1000) // Espera 1 segundo antes de consultar el estado
+                val runTest = openAI.getRun(currentThread.id, run.id)
+                runStatus = runTest.status
+            } while (runStatus != Status.Completed)
+
+            // Obtiene los mensajes del hilo y devuelve el último mensaje del asistente
+            val messages = openAI.messages(currentThread.id)
+            val lastAssistantMessage = messages.find { it.role == Role.Assistant }
+            lastAssistantMessage?.content?.firstOrNull()?.let { content ->
+                if (content is MessageContent.Text) content.text.value else "Error: La respuesta del asistente no es texto."
+            } ?: "Error: No se encontró respuesta del asistente."
+        } catch (e: Exception) {
+            "Se produjo un error al procesar su solicitud: ${e.message}"
         }
     }
 
     // Método para actualizar el token de la API de OpenAI
     private fun updateApiToken() {
         token = readValidLine("Ingrese la nueva OPENAI_API_KEY: ")
-        initializeOpenAI()
+        //initializeOpenAI()
         println("OPENAI_API_KEY actualizado correctamente.")
     }
 
@@ -162,10 +140,7 @@ class Agent(private var token: String, private var assistantId: String) {
         }
         kotlin.system.exitProcess(0)
     }
-
-
 }
-
 
 // Función para leer una línea válida de la entrada del usuario, con opción de comando de salida
 fun readValidLine(prompt: String, exitCommand: String = ""): String {
