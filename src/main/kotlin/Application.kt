@@ -21,30 +21,6 @@ val agent by lazy {
     }
 }
 
-/*fun main() {
-    val token = System.getenv("OPENAI_API_KEY") ?: throw IllegalStateException("OPENAI_API_KEY no está configurado.")
-    val assistantId = System.getenv("OPENAI_ASSISTANT_ID") ?: throw IllegalStateException("OPENAI_ASSISTANT_ID no está configurado.")
-
-    embeddedServer(Netty, port = 8080) {
-        routing {
-            post("/chat") {
-                val requestBody = call.receiveText()
-                val agent = Agent(token, assistantId) // Usa las variables de entorno aquí
-                val chatResponse = runBlocking {
-                    agent.initialize()
-                    agent.chat(requestBody)
-                }
-                call.respondText(chatResponse)
-            }
-
-            static("/") {
-                resources("static")
-                defaultResource("index.html", "static")
-            }
-        }
-    }.start(wait = true)
-}*/
-
 fun main() {
     embeddedServer(Netty, port = 8080) {
         routing {
