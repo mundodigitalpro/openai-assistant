@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat con Agente</title>
+</head>
+<body>
+<h1>Chat con Agente</h1>
+<input type="text" id="messageInput" placeholder="Escribe tu mensaje aquí">
+<button onclick="sendMessage()">Enviar Mensaje</button>
+<p>Respuesta: <span id="response"></span></p>
+
+<script>
+    async function sendMessage() {
+        const inputElement = document.getElementById('messageInput');
+        const message = inputElement.value;
+        const responseElement = document.getElementById('response');
+
+        try {
+            const response = await fetch('/chat', {
+                method: 'POST',
+                body: message, // Envía el mensaje como cuerpo de la solicitud
+            });
+
+            if (!response.ok) {
+                throw new Error(`Error HTTP: ${response.status}`);
+            }
+
+            const responseData = await response.text();
+            responseElement.textContent = responseData;
+        } catch (error) {
+            console.error('Error al enviar mensaje:', error);
+            responseElement.textContent = 'Error al recibir respuesta.';
+        }
+    }
+</script>
+</body>
+</html>

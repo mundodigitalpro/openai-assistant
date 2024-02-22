@@ -1,9 +1,13 @@
 plugins {
     kotlin("jvm") version "1.9.22"
     application
+    id("io.ktor.plugin") version "2.3.8"
 }
 application {
-    var mainClassName = "com.josejordan.MainKt"
+    mainClass.set("io.ktor.server.netty.EngineMain")
+
+    val isDevelopment: Boolean = project.ext.has("development")
+    applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
 }
 
 group = "com.josejordan"
@@ -19,6 +23,11 @@ dependencies {
     implementation("com.aallam.openai:openai-client:3.7.0")
     implementation ("io.ktor:ktor-client-cio:2.3.8")
     implementation ("io.ktor:ktor-client-core:2.3.8")
+    implementation("io.ktor:ktor-server-status-pages:2.3.8")
+    implementation("io.ktor:ktor-server-core-jvm")
+    implementation("io.ktor:ktor-server-netty-jvm")
+    implementation("io.ktor:ktor-server-config-yaml:2.3.8")
+
     implementation ("org.slf4j:slf4j-api:1.7.30")
     implementation ("ch.qos.logback:logback-classic:1.4.14")
 }

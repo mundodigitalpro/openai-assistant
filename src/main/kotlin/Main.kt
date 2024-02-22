@@ -57,7 +57,7 @@ class Agent(private var token: String, private var assistantId: String) {
     }
 
     // Método para enviar un mensaje al asistente y recibir su respuesta
-    private suspend fun chat(message: String): String {
+    suspend fun chat(message: String): String {
 
         val currentThread = thread ?: return "Error: El hilo no está inicializado."
         val currentAssistant = assistant ?: return "Error: El asistente no está inicializado."
