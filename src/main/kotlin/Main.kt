@@ -29,15 +29,7 @@ class Agent(private var token: String, private var assistantId: String) {
     }
     private val coroutineScope = CoroutineScope(Dispatchers.IO + coroutineExceptionHandler)
 
-    // Método para inicializar el agente de manera asíncrona
-    /*    suspend fun initialize() = coroutineScope {
-            launch(Dispatchers.Default) {
-                initializeOpenAI()
-                initializeAssistantAndThread()
-            }.join() // Espera a que la inicialización termine
-        }*/
-
-    // Simplifica la inicialización sin usar launch y join redundantes
+    // Método para inicializar el agente
     suspend fun initialize() {
         initializeOpenAI()
         initializeAssistantAndThread()
@@ -50,12 +42,7 @@ class Agent(private var token: String, private var assistantId: String) {
     }
 
     // Método para inicializar el asistente y el hilo de manera asíncrona
-/*
-    private suspend fun initializeAssistantAndThread() {
-        createAssistant(assistantId)
-        createThread()
-    }
-*/
+
     private suspend fun initializeAssistantAndThread() = coroutineScope {
         // Ejecución paralela con async-await
         val assistantDeferred = async { createAssistant(assistantId) }
@@ -67,9 +54,7 @@ class Agent(private var token: String, private var assistantId: String) {
 
 
     // Método para crear un asistente con el ID proporcionado
-/*    private suspend fun createAssistant(assistantId: String) {
-        assistant = openAI.assistant(id = AssistantId(assistantId))
-    }*/
+
     private suspend fun createAssistant(assistantId: String): Assistant? {
         return try {
             openAI.assistant(id = AssistantId(assistantId))
@@ -81,11 +66,6 @@ class Agent(private var token: String, private var assistantId: String) {
 
 
     // Método para crear un nuevo hilo de conversación
-/*
-    private suspend fun createThread() {
-        thread = openAI.thread()
-    }
-*/
 
     private suspend fun createThread(): Thread? {
         return try {
