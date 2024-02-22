@@ -13,6 +13,7 @@ import com.aallam.openai.api.thread.Thread
 import com.aallam.openai.client.OpenAI
 import kotlinx.coroutines.*
 
+
 // Importación de la anotación que permite el uso experimental de APIs en Kotlin
 @OptIn(BetaOpenAI::class)
 class Agent(private var token: String, private var assistantId: String) {
@@ -20,15 +21,28 @@ class Agent(private var token: String, private var assistantId: String) {
     private var openAI: OpenAI = OpenAI(token)
     private var assistant: Assistant? = null
     private var thread: Thread? = null
-    private val coroutineScope = CoroutineScope(Dispatchers.IO)
+
+
+    // Define un manejador de excepciones para las corutinas
+    private val coroutineExceptionHandler = CoroutineExceptionHandler { _, exception ->
+        println("Error en corutina: ${exception.localizedMessage}")
+    }
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + coroutineExceptionHandler)
 
     // Método para inicializar el agente de manera asíncrona
-    suspend fun initialize() = coroutineScope {
-        launch(Dispatchers.Default) {
-            initializeOpenAI()
-            initializeAssistantAndThread()
-        }.join() // Espera a que la inicialización termine
+    /*    suspend fun initialize() = coroutineScope {
+            launch(Dispatchers.Default) {
+                initializeOpenAI()
+                initializeAssistantAndThread()
+            }.join() // Espera a que la inicialización termine
+        }*/
+
+    // Simplifica la inicialización sin usar launch y join redundantes
+    suspend fun initialize() {
+        initializeOpenAI()
+        initializeAssistantAndThread()
     }
+
 
     // Método para inicializar el cliente de OpenAI con el token proporcionado
     private fun initializeOpenAI() {
@@ -127,12 +141,18 @@ class Agent(private var token: String, private var assistantId: String) {
             }
         }
     }
-    // Método para terminar la ejecución del programa de forma inmediata
+
     private fun exitApplication() {
         println("Cerrando aplicación...")
         coroutineScope.cancel("Preparando para cerrar la aplicación")
+        // Espera a que las corutinas finalicen después de la cancelación, si es necesario.
+        runBlocking {
+            coroutineScope.coroutineContext[Job]?.join()
+        }
         kotlin.system.exitProcess(0)
     }
+
+
 }
 
 
