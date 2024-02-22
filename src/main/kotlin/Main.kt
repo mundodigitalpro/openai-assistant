@@ -50,19 +50,50 @@ class Agent(private var token: String, private var assistantId: String) {
     }
 
     // Método para inicializar el asistente y el hilo de manera asíncrona
+/*
     private suspend fun initializeAssistantAndThread() {
         createAssistant(assistantId)
         createThread()
     }
-
-    // Método para crear un asistente con el ID proporcionado
-    private suspend fun createAssistant(assistantId: String) {
-        assistant = openAI.assistant(id = AssistantId(assistantId))
+*/
+    private suspend fun initializeAssistantAndThread() = coroutineScope {
+        // Ejecución paralela con async-await
+        val assistantDeferred = async { createAssistant(assistantId) }
+        val threadDeferred = async { createThread() }
+        // Espera a que ambas operaciones completen
+        assistant = assistantDeferred.await()
+        thread = threadDeferred.await()
     }
 
+
+    // Método para crear un asistente con el ID proporcionado
+/*    private suspend fun createAssistant(assistantId: String) {
+        assistant = openAI.assistant(id = AssistantId(assistantId))
+    }*/
+    private suspend fun createAssistant(assistantId: String): Assistant? {
+        return try {
+            openAI.assistant(id = AssistantId(assistantId))
+        } catch (e: Exception) {
+            println("Error al crear el asistente: ${e.message}")
+            null // Retorna null en caso de error
+        }
+    }
+
+
     // Método para crear un nuevo hilo de conversación
+/*
     private suspend fun createThread() {
         thread = openAI.thread()
+    }
+*/
+
+    private suspend fun createThread(): Thread? {
+        return try {
+            openAI.thread()
+        } catch (e: Exception) {
+            println("Error al crear el hilo: ${e.message}")
+            null // Retorna null en caso de error
+        }
     }
 
     // Método para enviar un mensaje al asistente y recibir su respuesta
