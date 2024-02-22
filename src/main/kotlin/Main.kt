@@ -91,6 +91,9 @@ class Agent(private var token: String, private var assistantId: String) {
         }
     }
 
+
+
+
     // Método para actualizar el token de la API de OpenAI
     private fun updateApiToken() {
         token = readValidLine("Ingrese la nueva OPENAI_API_KEY: ")
